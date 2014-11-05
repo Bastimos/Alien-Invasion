@@ -4,151 +4,218 @@ package com.sebastianwizert.alieninvasion;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.geom.AffineTransform;
+import java.awt.image.AffineTransformOp;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Random;
 
 import javax.imageio.ImageIO;
 
-public class Alien {
+public class Alien extends Enemy{
 
 	//Instance variables.
 	private double x;
 	private double y;
 	private double speed;
 	private double direction; //direction in radians
-		
+	private boolean visible;
+	private double health = 20;
 	
 	// If target is not there value is NaN
 	private double targetX= Double.NaN;
 	private double targetY= Double.NaN;
+	//private double numberOfHits=0;
+	double lastKnownHealth;
+	boolean alienHit;
+	private Color myColor = Color.GREEN;
 	
-	private Alien meFollows;
+	private File alien1 = new File("gfx/alien1.png");
+	private File alien1wounded1 = new File("gfx/alien1wounded1.png");
+	private File alien1wounded2 = new File("gfx/alien1wounded2.png");
+	private File alien1wounded3 = new File("gfx/alien1wounded3.png");
+	private File alien1wounded4 = new File("gfx/alien1wounded4.png");
+	private File alien2 = new File("gfx/alien2.png");
+	private File alien2wounded1 = new File("gfx/alien2wounded1.png");
+	private File alien2wounded2 = new File("gfx/alien2wounded2.png");
+	private File alien2wounded3 = new File("gfx/alien2wounded3.png");
+	private File alien2wounded4 = new File("gfx/alien2wounded4.png");
+	private BufferedImage alien1Image;
+	private BufferedImage alien1wounded1Image;
+	private BufferedImage alien1wounded2Image;
+	private BufferedImage alien1wounded3Image;
+	private BufferedImage alien1wounded4Image;
+	private BufferedImage alien2Image;
+	private BufferedImage alien2wounded1Image;
+	private BufferedImage alien2wounded2Image;
+	private BufferedImage alien2wounded3Image;
+	private BufferedImage alien2wounded4Image;
+	private double maxHealth;
 	
-	//shape size and colour
-	int myWidth = 10;
-	int myHeight = 10;
-	Color myColor = Color.GREEN;
+	private ArrayList<Weapon> enemyWeapons = new ArrayList<Weapon>();
+	private long firingInterval = 500;
+	private long lastFire;
+	//private Timer shootTimer;
+	private int numOfMissiles= 99;
+	private int numOfShockWaves= 99;
+	private String currentWeapon = "bullet";
+	private boolean keepShooting = true;
 	
-	File f = new File("src/alien1.png");
-	File f2 = new File("src/alien2.png");
-	BufferedImage alienImage;
-	BufferedImage alienImage2;
 	
-	private int numberOfHits=0;
-		
-		
 		public Alien(double startX, double startY) {
 			//Starting position
 
 			this.x = startX;
 			this.y = startY;
-			
+			this.maxHealth = this.health;
 			
 			try{
-				alienImage = ImageIO.read(f);
-				alienImage2 = ImageIO.read(f2);
+				alien1Image = ImageIO.read(alien1);
+				alien1wounded1Image = ImageIO.read(alien1wounded1);
+				alien1wounded2Image = ImageIO.read(alien1wounded2);
+				alien1wounded3Image = ImageIO.read(alien1wounded3);
+				alien1wounded4Image = ImageIO.read(alien1wounded4);
+				alien2Image = ImageIO.read(alien2);
+				alien2wounded1Image = ImageIO.read(alien2wounded1);
+				alien2wounded2Image = ImageIO.read(alien2wounded2);
+				alien2wounded3Image = ImageIO.read(alien2wounded3);
+				alien2wounded4Image = ImageIO.read(alien2wounded4);
 				} catch(Exception e){
 					System.out.println("file corupted");
 				}
-		}
-		
-		public void followAdult(Alien a){
-			this.meFollows = a;
 			
+			setShotFrequency();
 		}
 		
-		public void setTarget(double x,double y,double speed) {
-			this.targetX = x;
-			this.targetY = y;
-			this.speed= speed;
+		private void setShotFrequency(){
+			Random r = new Random();
+			
+			firingInterval =  r.nextInt(2000);
+			if(firingInterval < 1000) {
+				firingInterval = 1000;
+			} 
+			//System.out.println("firingInterval"+firingInterval);
 		}
-	
-		/*
-		 * This method will update the position of the object. If they are pressing either the left/right/up/down key, then the shape will move.
-		 * This method is called in the shapeUpdate() method of the ShapeAppPanel class.
-		 */
-		public void update() {
-			//If we follow update target 
-			if(meFollows != null){
-				if(targetX == meFollows.getTargetX()) {
-					this.targetX = meFollows.getX();
-					this.targetY = meFollows.getY();
+		public void setShot(boolean isShoting, String weaponType){
+			this.currentWeapon = weaponType;
+			this.keepShooting = isShoting;
+		}
+		public void shoot(String weaponType){
+
+			// check that we have waited long enough to fire
+			if (System.currentTimeMillis() - lastFire < firingInterval) {
+				return;
+			}
+			// if we waited long enough, create the shot entity, and record the time.
+			lastFire = System.currentTimeMillis();
+
+			this.direction = Math.toDegrees(direction)+90;
+			
+			if(weaponType.equals("bullet")){
+				if(Setup.soundSwitch == true){
+				 
+					new Sound2("sfx/laser1.wav");
 				}
-				//System.out.println("got his target");
+				Weapon b = new Bullet(x, y, direction);
+				enemyWeapons.add(b);
+				//System.out.println("coordinates passed to bullet x "+x + " y "+y+ " direction "+direction);
+			} else if(weaponType.equals("missile")){
+				if(numOfMissiles > 0) {
+					if(Setup.soundSwitch == true){
+					
+						new Sound2("sfx/rocket2.wav");
+					}
+					Weapon m = new Missile((int)x, (int)y, direction);
+					enemyWeapons.add(m);
+					numOfMissiles--;
+				}
+			} else if(weaponType.equals("shockWave")){
+				if(numOfShockWaves > 0) {
+					if(Setup.soundSwitch == true){
+					
+						new Sound2("sfx/expl1.wav");
+					}
+					Weapon sw = new ShockWave((int)x, (int)y);
+					enemyWeapons.add(sw);
+					numOfShockWaves--;
+				}
 			}
 			
-			//If we have target, go to target
+		}
+	
+		public void update() {
+			
+			if(keepShooting == true){
+				shoot(currentWeapon);
+			}
+
+				//If we have target, go to target
 				double dx = this.targetX-this.x;
 				double dy = this.targetY-this.y;
 				
-				double dist = (dx*dx) + (dy*dy);
-				//slow down before target
-				if (dist < (this.speed*this.speed)) this.speed = Math.sqrt(dist);
-				
 				this.direction = Math.atan2(dy, dx);
-				
-			
-			
+							
 			//Update coordinates with speed
 			this.x +=  this.speed * Math.cos(this.direction);
 			this.y +=  this.speed * Math.sin(this.direction);
 			
-			// Check bounds and add reflection from boundaries
-			if (this.x > 1.0) {
-				this.x = 1.0;
-				
-				//drop angle = reflection angle
-				this.direction =  2 * this.direction + (Math.PI);
-			} else if (this.x < 0.0) {
-				this.x = 0.0;
-				//drop angle = reflection angle
-				this.direction =  2 * this.direction + (Math.PI);
+			//alien hit
+			if(this.lastKnownHealth != this.health) {
+				this.alienHit = true;
+				this.lastKnownHealth = this.health;
+			} else if(this.lastKnownHealth == this.health) {
+				this.alienHit = false;
 			}
-			
-			if (this.y > 1.0) {
-				this.y = 1.0;
-				//drop angle = reflection angle
-				this.direction =  2 * this.direction + (Math.PI);
-			} else if (this.y < 0.0) {
-				this.y = 0.0;
-				//drop angle = reflection angle
-				this.direction =  2 * this.direction + (Math.PI);
-			}
-			
 			
 		}
-		
-		
 		
 		//Draw the shape of the object.
 		public void draw(Graphics2D g) {
 			
-			int x,y;
-			//Shape dimensions
-			int width = 10;
-			int height = 10;
-			//getting frame dimensions
-			Rectangle bounds = g.getDeviceConfiguration().getBounds();
+			if(direction > 360) direction = 0;
+			if(direction < - 360) direction = 0;
+			//Rotation information
+			double rotationRequired = Math.toRadians(direction);
 			
+			double locationX = alien1Image.getWidth() / 2;
+			double locationY = alien1Image.getHeight() / 2;
+			AffineTransform tx = AffineTransform.getRotateInstance(rotationRequired, locationX, locationY);
+			AffineTransformOp op = new AffineTransformOp(tx, AffineTransformOp.TYPE_BILINEAR);
+						
+			int correction = -25;
 			
-			x=(int)((double)bounds.width * this.x);
-			y=(int)((double)bounds.height * this.y);
-			g.setColor(this.myColor);
-			if(numberOfHits == 0){
-				g.drawImage(alienImage, (int)x, (int)y, null); 
-			}
-			if(numberOfHits > 0){
-				g.drawImage(alienImage2, (int)x, (int)y, null);
-				g.setColor(Color.GREEN);
-				g.fillOval( (int)x+20, (int)y+20, 20, 15);
-				if(numberOfHits > 4){
-					g.fillOval( (int)x+20, (int)y+35, 20, 15);
-					if(numberOfHits > 8){
-						g.fillOval( (int)x+10, (int)y+15, 20, 35);
-					}
+			//System.out.println("alien hit -> "+alienHit+" lastKnownHealth -> "+ lastKnownHealth+ " health -> "+health);
+			if(alienHit == true){
+				if(this.health < (this.maxHealth/100*30)){
+					g.drawImage(op.filter(alien2wounded4Image, null), (int)x+correction, (int)y+correction, null);
+				} else if(this.health < (this.maxHealth/100*50)){
+					g.drawImage(op.filter(alien2wounded3Image, null), (int)x+correction, (int)y+correction, null);
+				} else if(this.health < (this.maxHealth/100*70)){
+					g.drawImage(op.filter(alien2wounded2Image, null), (int)x+correction, (int)y+correction, null);
+				} else if(this.health < (this.maxHealth/100*90)){
+					g.drawImage(op.filter(alien2wounded1Image, null), (int)x+correction, (int)y+correction, null);
+				} else {
+					g.drawImage(op.filter(alien2Image, null), (int)x+correction, (int)y+correction,  null);
 				}
+				this.alienHit = false;
+			}else if(alienHit == false){
+				if(this.health < (this.maxHealth/100*30)){
+					g.drawImage(op.filter(alien1wounded4Image, null), (int)x+correction, (int)y+correction, null);
+				} else if(this.health < (this.maxHealth/100*50)){
+					g.drawImage(op.filter(alien1wounded3Image, null), (int)x+correction, (int)y+correction, null);
+				} else if(this.health < (this.maxHealth/100*70)){
+					g.drawImage(op.filter(alien1wounded2Image, null), (int)x+correction, (int)y+correction, null);
+				} else if(this.health < (this.maxHealth/100*90)){
+					g.drawImage(op.filter(alien1wounded1Image, null), (int)x+correction, (int)y+correction, null);
+				} else {
+					g.drawImage(op.filter(alien1Image, null), (int)x+correction, (int)y+correction, null);
+				} 
 			}
-			
+		
+			//show actual x, y position
+			//g.setColor(Color.YELLOW);
+			//g.fillOval( (int)x, (int)y, 20, 20);
 		}
 
 		public double getX() {
@@ -174,12 +241,6 @@ public class Alien {
 		public void setSpeed(double newSpeed) {
 			 this.speed = newSpeed;
 		}
-		
-		public void setShape(int width, int height, Color c){
-			this.myWidth = width;
-			this.myHeight = height;
-			this.myColor = c;
-		}
 
 		public double getSpeed() {
 			
@@ -188,13 +249,28 @@ public class Alien {
 		public void flipDirection(){
 			direction = -direction;
 		}
-
-		public int getNumberOfHits() {
-			return numberOfHits;
+		@Override
+		public ArrayList getWeapons() {
+			// TODO Auto-generated method stub
+			return this.enemyWeapons;
+		}
+		public void setVisible(boolean newVisible){
+			this.visible = newVisible;
 		}
 
-		public void setNumberOfHits(int numberOfHits) {
-			this.numberOfHits = numberOfHits;
+		@Override
+		public double getHealth() {
+			return this.health;
 		}
+		public void setHealth(double d){
+			this.health = d;
+		}
+		
+		public void setTarget(double x,double y,double speed) {
+			this.targetX = x;
+			this.targetY = y;
+			this.speed= speed;
+		}
+		
 		
 }
